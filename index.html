@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>年間指導計画 検索・閲覧</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    body { font-family: "Hiragino Sans", "Noto Sans JP", "Meiryo", sans-serif; }
+
+    /* 教科バッジ */
+    .subj { display:inline-flex; align-items:center; justify-content:center;
+            padding:3px 12px; border-radius:6px;
+            font-size:0.78rem; font-weight:700; }
+    .s-国語      { background:#FEE2E2; color:#B91C1C; }
+    .s-書写      { background:#FCE7F3; color:#9D174D; }
+    .s-社会      { background:#FEF3C7; color:#92400E; }
+    .s-地図      { background:#FFEDD5; color:#9A3412; }
+    .s-算数      { background:#DBEAFE; color:#1D4ED8; }
+    .s-理科      { background:#D1FAE5; color:#065F46; }
+    .s-生活      { background:#CFFAFE; color:#155E75; }
+    .s-音楽      { background:#EDE9FE; color:#5B21B6; }
+    .s-図画工作  { background:#FFE4E6; color:#9F1239; }
+    .s-家庭      { background:#FEF3C7; color:#78350F; }
+    .s-保健      { background:#D1FAE5; color:#064E3B; }
+    .s-英語      { background:#E0E7FF; color:#3730A3; }
+    .s-道徳      { background:#F5F5F4; color:#44403C; }
+
+    /* ステップインジケーター */
+    .step-done  { background:#1B3A6B; color:#fff; }
+    .step-now   { background:#fff; color:#1B3A6B; border:2px solid #1B3A6B; }
+    .step-todo  { background:#E5E7EB; color:#9CA3AF; }
+
+    /* コピーボタン */
+    .cpbtn {
+      display:inline-flex; align-items:center; gap:4px;
+      font-size:0.75rem; font-weight:600;
+      padding:5px 12px; border-radius:8px;
+      border:1.5px solid #CBD5E1; background:#F8FAFC; color:#64748B;
+      cursor:pointer; transition:all 0.15s; white-space:nowrap; flex-shrink:0;
+    }
+    .cpbtn:hover:not(.ok) { background:#E2E8F0; }
+    .cpbtn.ok { background:#F0FDF4; color:#16A34A; border-color:#86EFAC; }
+
+    /* 単元一覧スクロール */
+    .unit-list { max-height: 60vh; overflow-y: auto; }
+    .unit-list::-webkit-scrollbar { width: 5px; }
+    .unit-list::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+
+    /* タッチデバイス: タップターゲットを確保 */
+    @media (hover: none) {
+      .unit-list button { min-height: 52px; }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 min-h-screen" x-data="app()" x-init="init()" x-cloak>
+
+  <!-- ヘッダー -->
+  <header class="bg-gradient-to-r from-[#1B3A6B] to-[#2E528A] text-white shadow-xl">
+    <div class="max-w-2xl mx-auto px-4 sm:px-5 py-4 sm:py-5 flex items-center gap-3 sm:gap-4">
+      <div class="w-9 h-9 sm:w-10 sm:h-10 bg-white/20 rounded-xl flex items-center justify-center text-lg sm:text-xl flex-shrink-0">📚</div>
+      <div>
+        <h1 class="text-base sm:text-lg font-bold tracking-wide">年間指導計画 検索・閲覧</h1>
+        <p class="text-blue-200 text-xs mt-0.5">令和6年度版 ｜ 全学年・12教科</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- ローディング -->
+  <div x-show="loading" class="flex flex-col items-center justify-center py-32 text-gray-400">
+    <div class="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+    <p class="text-sm">データを読み込んでいます...</p>
+  </div>
+
+  <div x-show="!loading" class="max-w-2xl mx-auto px-4 py-6 space-y-5">
+
+    <!-- ステップインジケーター -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 px-4 sm:px-5 py-4">
+      <div class="flex items-center gap-1">
+        <template x-for="(label, i) in stepLabels" :key="i">
+          <div class="flex items-center" :class="i < stepLabels.length - 1 ? 'flex-1' : ''">
+            <div class="flex flex-col items-center gap-1 flex-shrink-0">
+              <button
+                class="w-8 h-8 rounded-full text-xs font-bold transition-all"
+                :class="{
+                  'step-done': step > i + 1,
+                  'step-now':  step === i + 1,
+                  'step-todo': step < i + 1
+                }"
+                :disabled="step <= i + 1"
+                @click="goBack(i + 1)"
+                x-text="step > i + 1 ? '✓' : (i + 1)"
+              ></button>
+              <span class="text-xs font-medium whitespace-nowrap"
+                    :class="step >= i + 1 ? 'text-[#1B3A6B]' : 'text-gray-400'"
+                    x-text="label"></span>
+            </div>
+            <div x-show="i < stepLabels.length - 1"
+                 class="flex-1 h-0.5 mx-2 rounded-full"
+                 :class="step > i + 1 ? 'bg-[#1B3A6B]' : 'bg-gray-200'"></div>
+          </div>
+        </template>
+      </div>
+
+      <!-- 選択済みパンくず -->
+      <div x-show="selectedGrade" class="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+        <button @click="goBack(1)"
+          class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-2 py-1 rounded-md transition">
+          <span x-text="selectedGrade"></span>
+        </button>
+        <span x-show="selectedSubject" class="text-gray-300">›</span>
+        <button x-show="selectedSubject" @click="goBack(2)"
+          class="subj hover:opacity-80 transition" :class="'s-' + selectedSubject" x-text="selectedSubject"></button>
+        <span x-show="selectedUnit" class="text-gray-300">›</span>
+        <button x-show="selectedUnit" @click="goBack(3)"
+          class="bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium px-2 py-1 rounded-md transition"
+          style="max-width: min(200px, calc(100vw - 140px)); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block;">
+          <span x-text="selectedUnit"></span>
+        </button>
+        <span x-show="selectedJi" class="text-gray-300">›</span>
+        <span x-show="selectedJi"
+          class="bg-emerald-50 text-emerald-700 font-semibold px-2 py-1 rounded-md"
+          x-text="'第' + selectedJi + '時'"></span>
+      </div>
+    </div>
+
+    <!-- STEP 1: 学年選択 -->
+    <div x-show="step === 1">
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-4 sm:px-5 py-4 border-b border-gray-100">
+          <h2 class="text-base font-bold text-gray-800">① 学年を選んでください</h2>
+        </div>
+        <div class="p-4 sm:p-5 grid grid-cols-3 gap-3">
+          <template x-for="g in availableGrades" :key="g">
+            <button @click="selectGrade(g)"
+              class="py-6 rounded-xl border-2 border-gray-200 bg-gray-50 hover:border-[#1B3A6B] hover:bg-[#1B3A6B] hover:text-white font-bold text-xl text-gray-700 transition-all shadow-sm hover:shadow-md">
+              <span x-text="g"></span>
+            </button>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2: 教科選択 -->
+    <div x-show="step === 2">
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-4 sm:px-5 py-4 border-b border-gray-100">
+          <h2 class="text-base font-bold text-gray-800">② 教科を選んでください</h2>
+          <p class="text-xs text-gray-400 mt-0.5" x-text="selectedGrade + 'のデータがある教科を表示しています'"></p>
+        </div>
+        <div class="p-4 sm:p-5 grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+          <template x-for="s in availableSubjects" :key="s">
+            <button @click="selectSubject(s)"
+              class="py-4 sm:py-5 rounded-xl border-2 font-bold text-sm sm:text-base transition-all shadow-sm hover:shadow-md active:scale-95 hover:scale-105"
+              :class="{
+                's-国語':    s==='国語',    's-書写':  s==='書写',
+                's-社会':    s==='社会',    's-地図':  s==='地図',
+                's-算数':    s==='算数',    's-理科':  s==='理科',
+                's-生活':    s==='生活',    's-音楽':  s==='音楽',
+                's-図画工作':s==='図画工作','s-家庭':  s==='家庭',
+                's-保健':    s==='保健',    's-英語':  s==='英語',
+                's-道徳':    s==='道徳'
+              }"
+              style="min-height:64px"
+              x-text="s">
+            </button>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3: 単元名選択 -->
+    <div x-show="step === 3">
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-4 sm:px-5 py-4 border-b border-gray-100">
+          <h2 class="text-base font-bold text-gray-800">③ 単元名を選んでください</h2>
+          <p class="text-xs text-gray-400 mt-0.5" x-text="availableUnits.length + '件の単元があります'"></p>
+        </div>
+        <div class="unit-list divide-y divide-gray-100">
+          <template x-for="(u, i) in availableUnits" :key="i">
+            <button @click="selectUnit(u)"
+              class="w-full text-left px-4 sm:px-5 py-3.5 sm:py-4 hover:bg-blue-50 active:bg-blue-100 transition flex items-center gap-3 group">
+              <span class="w-7 h-7 rounded-full bg-slate-100 group-hover:bg-blue-100 text-slate-500 group-hover:text-blue-700 text-xs font-bold flex items-center justify-center flex-shrink-0"
+                    x-text="i + 1"></span>
+              <span class="font-medium text-gray-800 group-hover:text-blue-800 text-sm leading-snug" x-text="u || '（単元名なし）'"></span>
+              <span class="ml-auto text-gray-300 group-hover:text-blue-400 text-lg flex-shrink-0">›</span>
+            </button>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 4: 時間選択 + 結果表示 -->
+    <div x-show="step === 4" class="space-y-4">
+
+      <!-- 時間選択（複数ある場合） -->
+      <div x-show="availableTimes.length > 1 && !selectedJi">
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+          <div class="px-4 sm:px-5 py-4 border-b border-gray-100">
+            <h2 class="text-base font-bold text-gray-800">④ 時間を選んでください</h2>
+            <p class="text-xs text-gray-400 mt-0.5" x-text="'この単元は ' + availableTimes.length + ' 時間あります'"></p>
+          </div>
+          <div class="p-4 sm:p-5 grid grid-cols-4 sm:flex sm:flex-wrap gap-2">
+            <template x-for="j in availableTimes" :key="j">
+              <button @click="selectJi(j)"
+                class="py-4 px-2 sm:px-4 sm:min-w-[80px] rounded-xl border-2 font-bold text-sm transition-all shadow-sm bg-gray-50 border-gray-200 text-gray-700 hover:border-[#1B3A6B] hover:bg-[#1B3A6B] hover:text-white active:bg-[#122952] hover:shadow-md"
+                x-text="'第' + j + '時'">
+              </button>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- 結果カード -->
+      <template x-if="result.length > 0">
+        <div class="space-y-3">
+          <template x-for="(row, ri) in result" :key="row.id">
+            <div class="bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden">
+
+              <!-- カードヘッダー -->
+              <div class="px-4 sm:px-5 py-4 bg-gradient-to-r from-slate-50 to-blue-50 border-b border-gray-100">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="bg-slate-200 text-slate-700 text-xs font-bold px-2 py-0.5 rounded" x-text="row.学年"></span>
+                  <span class="subj" :class="'s-' + row.教科" x-text="row.教科"></span>
+                  <span x-show="row.時" class="text-gray-500 text-sm font-medium" x-text="'第' + row.時 + '時'"></span>
+                </div>
+                <h3 class="mt-2 text-base font-bold text-gray-900 leading-snug" x-text="row.単元名 || '（単元名なし）'"></h3>
+              </div>
+
+              <div class="p-4 sm:p-5 space-y-4">
+
+                <!-- 学習内容 -->
+                <div class="rounded-xl border-2 border-blue-100 overflow-hidden">
+                  <div class="flex items-center justify-between gap-2 px-4 py-2.5 bg-blue-50 border-b border-blue-100">
+                    <span class="text-sm font-bold text-blue-800">📝 学習内容</span>
+                    <button class="cpbtn" :class="{ ok: cs[row.id + '_content'] }"
+                      @click="cp(row.学習内容, row.id + '_content')"
+                      x-text="cs[row.id + '_content'] ? '✓ コピー済' : '📋 コピー'"></button>
+                  </div>
+                  <p class="px-4 py-3 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed"
+                     x-text="row.学習内容 || '—'"></p>
+                </div>
+
+                <!-- 評価規準 -->
+                <div x-show="row.知識技能 || row.思考判断表現 || row.主体的態度">
+                  <div class="flex items-center justify-between gap-2 mb-3">
+                    <h4 class="text-sm font-bold text-gray-700">📊 評価規準</h4>
+                    <button class="cpbtn" :class="{ ok: cs[row.id + '_all'] }"
+                      @click="cpAll(row)"
+                      x-text="cs[row.id + '_all'] ? '✓ コピー済' : '📋 まとめてコピー'"></button>
+                  </div>
+
+                  <div x-show="row.知識技能" class="rounded-xl border border-gray-200 overflow-hidden mb-2">
+                    <div class="flex items-center justify-between gap-2 px-3 sm:px-4 py-2.5 bg-emerald-50 border-b border-emerald-100">
+                      <span class="text-xs font-bold text-emerald-700 flex items-center gap-1.5 flex-shrink-0">
+                        <span class="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>
+                        知識・技能
+                      </span>
+                      <button class="cpbtn" :class="{ ok: cs[row.id + '_chi'] }"
+                        @click="cp(row.知識技能, row.id + '_chi')"
+                        x-text="cs[row.id + '_chi'] ? '✓' : '📋 コピー'"></button>
+                    </div>
+                    <p class="px-3 sm:px-4 py-3 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed" x-text="row.知識技能"></p>
+                  </div>
+
+                  <div x-show="row.思考判断表現" class="rounded-xl border border-gray-200 overflow-hidden mb-2">
+                    <div class="flex items-center justify-between gap-2 px-3 sm:px-4 py-2.5 bg-violet-50 border-b border-violet-100">
+                      <span class="text-xs font-bold text-violet-700 flex items-center gap-1.5 flex-shrink-0">
+                        <span class="w-2 h-2 bg-violet-500 rounded-full inline-block"></span>
+                        思考・判断・表現
+                      </span>
+                      <button class="cpbtn" :class="{ ok: cs[row.id + '_shi'] }"
+                        @click="cp(row.思考判断表現, row.id + '_shi')"
+                        x-text="cs[row.id + '_shi'] ? '✓' : '📋 コピー'"></button>
+                    </div>
+                    <p class="px-3 sm:px-4 py-3 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed" x-text="row.思考判断表現"></p>
+                  </div>
+
+                  <div x-show="row.主体的態度" class="rounded-xl border border-gray-200 overflow-hidden">
+                    <div class="px-3 sm:px-4 py-2.5 bg-amber-50 border-b border-amber-100">
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-xs font-bold text-amber-700 flex items-center gap-1.5">
+                          <span class="w-2 h-2 bg-amber-500 rounded-full inline-block flex-shrink-0"></span>
+                          <span>主体的に学習に<br class="sm:hidden">取り組む態度</span>
+                        </span>
+                        <button class="cpbtn flex-shrink-0" :class="{ ok: cs[row.id + '_tai'] }"
+                          @click="cp(row.主体的態度, row.id + '_tai')"
+                          x-text="cs[row.id + '_tai'] ? '✓' : '📋 コピー'"></button>
+                      </div>
+                    </div>
+                    <p class="px-3 sm:px-4 py-3 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed" x-text="row.主体的態度"></p>
+                  </div>
+                </div>
+
+                <!-- 評価規準なし -->
+                <div x-show="!row.知識技能 && !row.思考判断表現 && !row.主体的態度"
+                     class="rounded-xl border-2 border-dashed border-gray-200 py-6 text-center text-gray-400 text-sm">
+                  評価規準の記載なし
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- ナビゲーション -->
+          <div class="bg-white rounded-2xl border border-gray-200 p-4 space-y-3">
+            <!-- 時間戻る（複数時間がある場合） -->
+            <div x-show="availableTimes.length > 1" class="text-center border-b border-gray-100 pb-3">
+              <button @click="selectedJi = null; cs = {}"
+                class="text-sm text-blue-600 hover:text-blue-800 font-semibold underline underline-offset-2 py-1 px-2">
+                ← 別の時間を選ぶ
+              </button>
+            </div>
+            <p class="text-xs text-gray-400 font-medium text-center">別の指導計画を確認する</p>
+            <div class="grid grid-cols-1 sm:flex sm:flex-wrap sm:justify-center gap-2">
+              <button @click="goBack(3)"
+                class="text-sm sm:text-xs bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-700 font-semibold px-3 py-2.5 sm:py-1.5 rounded-lg transition text-center">
+                別の単元を選ぶ
+              </button>
+              <button @click="goBack(2)"
+                class="text-sm sm:text-xs bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 font-semibold px-3 py-2.5 sm:py-1.5 rounded-lg transition text-center">
+                別の教科を選ぶ
+              </button>
+              <button @click="goBack(1)"
+                class="text-sm sm:text-xs bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 font-semibold px-3 py-2.5 sm:py-1.5 rounded-lg transition text-center">
+                学年から選び直す
+              </button>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <script>
+    function app() {
+      return {
+        data: [],
+        loading: true,
+        step: 1,
+        stepLabels: ['学年', '教科', '単元名', '時間'],
+        selectedGrade:   null,
+        selectedSubject: null,
+        selectedUnit:    null,
+        selectedJi:      null,
+        cs: {},
+
+        async init() {
+          const res = await fetch('data/plans.json');
+          this.data = await res.json();
+          this.loading = false;
+        },
+
+        get availableGrades() {
+          const order = ['1年','2年','3年','4年','5年','6年'];
+          const has = new Set(this.data.map(r => r.学年));
+          return order.filter(g => has.has(g));
+        },
+
+        get availableSubjects() {
+          if (!this.selectedGrade) return [];
+          const order = ['国語','書写','社会','地図','算数','理科','生活','音楽','図画工作','家庭','保健','英語','道徳'];
+          const has = new Set(this.data.filter(r => r.学年 === this.selectedGrade).map(r => r.教科));
+          return order.filter(s => has.has(s));
+        },
+
+        get availableUnits() {
+          if (!this.selectedGrade || !this.selectedSubject) return [];
+          const seen = new Set();
+          const list = [];
+          this.data
+            .filter(r => r.学年 === this.selectedGrade && r.教科 === this.selectedSubject)
+            .forEach(r => { if (!seen.has(r.単元名)) { seen.add(r.単元名); list.push(r.単元名); } });
+          return list;
+        },
+
+        get availableTimes() {
+          if (!this.selectedGrade || !this.selectedSubject || !this.selectedUnit) return [];
+          const seen = new Set();
+          const list = [];
+          this.data
+            .filter(r => r.学年 === this.selectedGrade && r.教科 === this.selectedSubject && r.単元名 === this.selectedUnit)
+            .forEach(r => { if (!seen.has(r.時)) { seen.add(r.時); list.push(r.時); } });
+          return list.sort((a, b) => {
+            const na = parseInt(a), nb = parseInt(b);
+            return (isNaN(na) || isNaN(nb)) ? String(a).localeCompare(String(b)) : na - nb;
+          });
+        },
+
+        get result() {
+          if (this.availableTimes.length > 1 && !this.selectedJi) return [];
+          const ji = this.selectedJi || this.availableTimes[0];
+          if (!ji && this.availableTimes.length === 0) return [];
+          return this.data.filter(r =>
+            r.学年 === this.selectedGrade &&
+            r.教科 === this.selectedSubject &&
+            r.単元名 === this.selectedUnit &&
+            (this.availableTimes.length <= 1 || r.時 === ji)
+          );
+        },
+
+        selectGrade(g) {
+          this.selectedGrade = g;
+          this.selectedSubject = null;
+          this.selectedUnit = null;
+          this.selectedJi = null;
+          this.step = 2;
+        },
+        selectSubject(s) {
+          this.selectedSubject = s;
+          this.selectedUnit = null;
+          this.selectedJi = null;
+          this.step = 3;
+        },
+        selectUnit(u) {
+          this.selectedUnit = u;
+          this.selectedJi = null;
+          this.cs = {};
+          this.step = 4;
+        },
+        selectJi(j) {
+          this.selectedJi = j;
+          this.cs = {};
+        },
+
+        goBack(toStep) {
+          if (toStep === 1) { this.selectedGrade = null; this.selectedSubject = null; this.selectedUnit = null; this.selectedJi = null; }
+          if (toStep === 2) { this.selectedSubject = null; this.selectedUnit = null; this.selectedJi = null; }
+          if (toStep === 3) { this.selectedUnit = null; this.selectedJi = null; }
+          if (toStep === 4) { this.selectedJi = null; }
+          this.step = toStep;
+          this.cs = {};
+        },
+
+        async cp(text, key) {
+          if (!text) return;
+          await navigator.clipboard.writeText(text);
+          this.cs = { ...this.cs, [key]: true };
+          setTimeout(() => { this.cs = { ...this.cs, [key]: false }; }, 1500);
+        },
+        async cpAll(row) {
+          const parts = [];
+          if (row.知識技能)     parts.push('【知識・技能】\n' + row.知識技能);
+          if (row.思考判断表現) parts.push('【思考・判断・表現】\n' + row.思考判断表現);
+          if (row.主体的態度)   parts.push('【主体的に学習に取り組む態度】\n' + row.主体的態度);
+          if (!parts.length) return;
+          await navigator.clipboard.writeText(parts.join('\n\n'));
+          this.cs = { ...this.cs, [row.id + '_all']: true };
+          setTimeout(() => { this.cs = { ...this.cs, [row.id + '_all']: false }; }, 1500);
+        },
+      };
+    }
+  </script>
+</body>
+</html>
